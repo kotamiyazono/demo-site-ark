@@ -12,58 +12,39 @@ jobs:
     
     permissions:
       issues: write
-      contents: read
-      pull-requests: write
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
       - name: Assign Copilot and add comment
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.COPILOT_PAT }}
           script: |
+            const issueNodeId = context.payload.issue.node_id;
+            const copilotNodeId = 'BOT_kgDOC9w8XQ';
+            
             try {
-              const issue = await github.rest.issues.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number
-              });
-              
-              const issueNodeId = issue.data.node_id;
-              const copilotNodeId = 'BOT_kgDOC9w8XQ';
-              
               const mutation = `
-                mutation {
+                mutation($issueId: ID!, $assignees: [ID!]!) {
                   addAssigneesToAssignable(input: {
-                    assignableId: "${issueNodeId}",
-                    assigneeIds: ["${copilotNodeId}"]
+                    assignableId: $issueId,
+                    assigneeIds: $assignees
                   }) {
-                    assignable {
-                      ... on Issue {
-                        assignees(first: 10) {
-                          nodes {
-                            login
-                          }
-                        }
-                      }
-                    }
+                    clientMutationId
                   }
                 }
               `;
               
               await github.graphql(mutation, {
-                headers: {
-                  'GraphQL-Features': 'issues_copilot_assignment_api_support'
-                }
+                issueId: issueNodeId,
+                assignees: [copilotNodeId],
+                headers: { 'GraphQL-Features': 'issues_copilot_assignment_api_support' },
               });
               
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: '🤖 Copilot Workspace に割り当てました。処理を開始します。'
+                body: '🤖 Copilot Workspace に割り当てました。'
               });
             } catch (error) {
               console.error(error);
@@ -71,7 +52,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: '⚠️ Copilot の自動アサインに失敗しました。管理者が手動で対応してください。'
+                body: '⚠️ Copilot の自動アサインに失敗しました。'
               });
               throw error;
             }
