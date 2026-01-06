@@ -1,0 +1,36 @@
+name: Auto Ready for Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-ready:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.draft == true &&
+      startsWith(github.head_ref, 'copilot/')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check commit count
+        id: commit_count
+        run: |
+          # Get the number of commits in the PR
+          COMMIT_COUNT=$(git rev-list --count origin/${{ github.base_ref }}..HEAD)
+          echo "count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "Number of commits: $COMMIT_COUNT"
+      
+      - name: Mark PR as ready for review
+        if: steps.commit_count.outputs.count >= 2
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          gh pr ready ${{ github.event.pull_request.number }}
